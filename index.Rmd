@@ -1,0 +1,143 @@
+---
+title: "Untitled"
+author: "Shuhaida"
+date: "December 16, 2015"
+output: html_document
+---
+
+
+
+```{r}
+train <- read.csv("pml-training.csv")
+test <- read.csv("pml-testing.csv")
+```
+
+Preprocessing
+
+Partitioning the training set
+```{r message=FALSE}
+library(caret)
+
+```
+
+We separate our training data into a training set and a validation set so that we can validate our model.
+
+```{r}
+set.seed(123456)
+trainset <- createDataPartition(train$classe, p = 0.8, list = FALSE)
+Training <- train[trainset, ]
+Validation <- train[-trainset, ]
+```
+Feature selection
+
+First we clean up near zero variance features, columns with missing values and descriptive fields.
+
+```{r}
+# exclude near zero variance features
+nzvcol <- nearZeroVar(Training)
+Training <- Training[, -nzvcol]
+
+# exclude columns with m40% ore more missing values exclude descriptive
+# columns like name etc
+cntlength <- sapply(Training, function(x) {
+    sum(!(is.na(x) | x == ""))
+})
+nullcol <- names(cntlength[cntlength < 0.6 * length(Training$classe)])
+descriptcol <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", 
+    "cvtd_timestamp", "new_window", "num_window")
+excludecols <- c(descriptcol, nullcol)
+Training <- Training[, !names(Training) %in% excludecols]
+```
+
+Model Train
+
+We will use random forest as our model as implemented in the randomForest package by Breiman's random forest algorithm (based on Breiman and Cutler's original Fortran code) for classification and regression.
+
+```{r}
+library(randomForest)
+## randomForest 4.6-7
+## Type rfNews() to see new features/changes/bug fixes.
+rfModel <- randomForest(classe ~ ., data = Training, importance = TRUE, ntrees = 10)
+```
+Model Validation
+
+Let us now test our model performance on the training set itself and the cross validation set.
+
+Training set accuracy
+
+```{r}
+ptraining <- predict(rfModel, Training)
+print(confusionMatrix(ptraining, Training$classe))
+```
+
+Obviously our model performs excellent against the training set, but we need to cross validate the performance against the held out set and see if we have avoided overfitting.
+
+Validation set accuracy (Out-of-Sample)
+
+Let us now see how our model performs on the cross validation set that we held out from training.
+
+```{r}
+pvalidation <- predict(rfModel, Validation)
+print(confusionMatrix(pvalidation, Validation$classe))
+```
+
+The cross validation accuracy is 99.5% and the out-of-sample error is therefore 0.5% so our model performs rather good.
+
+Test set prediction
+
+The prediction of our algorithm for the test set is:
+
+```{r}
+ptest <- predict(rfModel, test)
+ptest
+```
+The confusion matrix created gives an accuracy of 99.6%. This is excellent.
+
+
+Fine Tuning
+
+Assess Number of relevant variables
+
+```{r}
+varImpRF <- train(classe ~ ., data = Training, method = "rf")
+varImpObj <- varImp(varImpRF)
+# Top 40 plot
+plot(varImpObj, main = "Importance of Top 40 Variables", top = 40)
+plot(varImpObj, main = "Importance of Top 25 Variables", top = 25)
+```
+Conclusion
+
+The Random Forest method worked  well.
+
+The Confusion Matrix achieved 99.6% accuracy. 
+
+The logic behind using the random forest method as the predictor rather than other methods or a combination of various methods is:
+
+Random forests are suitable when to handling a large number of inputs, especially when the interactions between variables are unknown.
+Random forest's built in cross-validation component that gives an unbiased estimate of the forest's out-of-sample (or bag) (OOB) error rate.
+A Random forest can handle unscaled variables and categorical variables. This is more forgiving with the cleaning of the data.
+It worked
+Prepare the submission. (using COURSERA provided code)
+
+
+We then save the output to files according to instructions and post it to the submission page.
+
+
+```{r}
+answers <- as.vector(ptest)
+
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
+
+
+
+
